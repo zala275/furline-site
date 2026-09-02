@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Furline</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html, body{height:100%;overflow:hidden;}
+  body{
+    font-family:Arial, sans-serif;
+    background:#f4f1ea;
+    color:#2b2318;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .card{
+    width:380px;
+    max-width:92vw;
+    background:#ffffff;
+    border:1px solid #d8d2c2;
+    border-radius:6px;
+    padding:24px 26px;
+  }
+  h1{
+    font-size:20px;
+    font-weight:bold;
+    margin-bottom:4px;
+  }
+  p.sub{
+    font-size:13px;
+    color:#6b6355;
+    margin-bottom:16px;
+  }
+  label{
+    display:block;
+    font-size:13px;
+    font-weight:bold;
+    margin-top:10px;
+    margin-bottom:4px;
+  }
+  label:first-of-type{margin-top:0;}
+  input, textarea{
+    width:100%;
+    font-family:Arial, sans-serif;
+    font-size:14px;
+    padding:8px 10px;
+    border:1px solid #c9c2ae;
+    border-radius:4px;
+    background:#faf8f3;
+  }
+  textarea{min-height:56px;resize:none;}
+  input:focus, textarea:focus{outline:none;border-color:#5c4b36;}
+
+  button{
+    margin-top:14px;
+    width:100%;
+    padding:10px;
+    font-size:14px;
+    font-weight:bold;
+    border:none;
+    border-radius:4px;
+    background:#2b2318;
+    color:#ffffff;
+    cursor:pointer;
+  }
+  button:disabled{opacity:0.6;}
+
+  #formMsg{
+    margin-top:10px;
+    font-size:12px;
+    display:none;
+  }
+  #formMsg.show{display:block;}
+  #formMsg.ok{color:#3f4d3a;}
+  #formMsg.err{color:#8c4a2f;}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>Furline</h1>
+  <p class="sub">Tell us about your furniture issue</p>
+
+  <form id="issueForm">
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" required>
+
+    <label for="furniture_type">Furniture type</label>
+    <input type="text" id="furniture_type" name="furniture_type" required>
+
+    <label for="issue">Issue</label>
+    <textarea id="issue" name="issue" required></textarea>
+
+    <label for="phone">Phone number</label>
+    <input type="text" id="phone" name="phone" required>
+
+    <label for="email">Email</label>
+    <input type="email" id="email" name="email" required>
+
+    <button type="submit" id="submitBtn">Submit</button>
+    <div id="formMsg"></div>
+  </form>
+</div>
+
+<script>
+const form = document.getElementById('issueForm');
+const btn = document.getElementById('submitBtn');
+const msg = document.getElementById('formMsg');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  msg.className = '';
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
+  const formData = new FormData(form);
+
+  try {
+    const res = await fetch('/submit', { method: 'POST', body: formData });
+    const data = await res.json();
+
+    if (data.ok) {
+      msg.textContent = 'Sent. We will contact you soon.';
+      msg.className = 'show ok';
+      form.reset();
+    } else {
+      msg.textContent = data.error || 'Something went wrong.';
+      msg.className = 'show err';
+    }
+  } catch (err) {
+    msg.textContent = 'Could not submit. Try again.';
+    msg.className = 'show err';
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Submit';
+});
+</script>
+
+</body>
+</html>
