@@ -2,25 +2,23 @@
 Furniture business service-request site.
 
 Flow:
-  1. Customer fills out the form (name, contact, issue description).
+  1. Customer fills out the form (name, furniture type, issue, phone, email).
   2. The ML model (trained by train_model.py) classifies the issue text
      into a category and flags urgency.
-  3. All details + the ML prediction are emailed to the business owner.
+  3. All details + the ML prediction are sent to Formspree, which forwards
+     them by email to the business owner. No email login/password needed.
 
 Setup:
   1. pip install -r requirements.txt
   2. python train_model.py          (creates model/classifier.pkl)
-  3. Set the environment variables below (see README.md for how to get
-     a Gmail "app password", or swap in any other SMTP provider).
-  4. python app.py
+  3. python app.py
 """
 
 import os
 import pickle
-import smtplib
-from email.mime.text import MIMEText
 from pathlib import Path
 
+import requests
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
@@ -34,12 +32,8 @@ URGENT_KEYWORDS = [
     "defective", "stuck", "torn", "chip", "dent",
 ]
 
-# --- Email settings (set these as environment variables before running) --
-SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USERNAME = os.environ.get("SMTP_USERNAME", "")  # your sending email address
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")  # app password, not your normal password
-OWNER_EMAIL = os.environ.get("OWNER_EMAIL", "ghanshyamliningwork@gmail.com")  # where submissions are sent
+# Formspree endpoint that forwards submissions to ghanshyamliningwork@gmail.com
+FORMSPREE_URL = "https://formspree.io/f/maeyjkgn"
 
 
 def get_model():
@@ -69,38 +63,29 @@ def classify_issue(text: str):
     }
 
 
-def send_email(name, furniture_type, phone, email, issue_text, prediction):
-    if not (SMTP_USERNAME and SMTP_PASSWORD):
-        raise RuntimeError(
-            "Email is not configured. Set SMTP_USERNAME and SMTP_PASSWORD "
-            "environment variables (see README.md)."
-        )
-
+def send_via_formspree(name, furniture_type, phone, email, issue_text, prediction):
     urgency_line = "HIGH PRIORITY" if prediction["urgent"] else "Normal"
 
-    body = f"""New service request from your website
+    payload = {
+        "name": name,
+        "furniture_type": furniture_type,
+        "phone": phone,
+        "email": email,
+        "issue": issue_text,
+        "predicted_category": prediction["category"],
+        "confidence": f"{prediction['confidence']}%",
+        "urgency": urgency_line,
+        "_subject": f"Furline: [{prediction['category']}] New request from {name}",
+    }
 
-Customer name: {name}
-Furniture type: {furniture_type}
-Phone: {phone}
-Email: {email}
-
-Predicted category: {prediction['category']} ({prediction['confidence']}% confidence)
-Urgency: {urgency_line}
-
-Issue description:
-{issue_text}
-"""
-
-    msg = MIMEText(body)
-    msg["Subject"] = f"Furline: [{prediction['category']}] New request from {name}"
-    msg["From"] = SMTP_USERNAME
-    msg["To"] = OWNER_EMAIL
-
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-        server.starttls()
-        server.login(SMTP_USERNAME, SMTP_PASSWORD)
-        server.sendmail(SMTP_USERNAME, [OWNER_EMAIL], msg.as_string())
+    response = requests.post(
+        FORMSPREE_URL,
+        data=payload,
+        headers={"Accept": "application/json"},
+        timeout=15,
+    )
+    if response.status_code not in (200, 201):
+        raise RuntimeError(f"Formspree error: {response.status_code} {response.text}")
 
 
 @app.route("/")
@@ -122,7 +107,7 @@ def submit():
     prediction = classify_issue(issue_text)
 
     try:
-        send_email(name, furniture_type, phone, email, issue_text, prediction)
+        send_via_formspree(name, furniture_type, phone, email, issue_text, prediction)
     except RuntimeError as e:
         print(f"Email not sent: {e}")
         return jsonify({
